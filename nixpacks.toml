@@ -1,0 +1,15 @@
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip", "ffmpeg"]
+
+[phases.install]
+cmds = [
+    "python -m pip install --upgrade pip",
+    "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300 --timeout-graceful-shutdown 300"
+
+[variables]
+PYTHONUNBUFFERED = "1"
+PORT = "8000"

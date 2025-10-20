@@ -109,26 +109,39 @@ class ConsultationSession:
 class ConsultationSessionManager:
     """Manages active consultation sessions in memory"""
 
-    def __init__(self, session_timeout_minutes: int = 30):
+    def __init__(self, session_timeout_minutes: int = 30, auto_finalize_minutes: int = 8):
         self.sessions: Dict[str, ConsultationSession] = {}
         self.session_timeout_minutes = session_timeout_minutes
-        logger.info(f"🗂️ ConsultationSessionManager initialized (timeout: {session_timeout_minutes}m)")
+        self.auto_finalize_minutes = auto_finalize_minutes  # Auto-finalize after inactivity
+        logger.info(f"🗂️ ConsultationSessionManager initialized (timeout: {session_timeout_minutes}m, auto-finalize: {auto_finalize_minutes}m)")
 
     def get_or_create_session(
         self,
         phone_number: str,
-        doctor_session: Dict[str, Any]
+        doctor_session: Dict[str, Any],
+        force_new: bool = False
     ) -> ConsultationSession:
         """Get existing session or create new one"""
 
         # Clean expired sessions
         self._cleanup_expired_sessions()
 
-        # Get existing session
-        if phone_number in self.sessions:
+        # Check if existing session should auto-finalize
+        if phone_number in self.sessions and not force_new:
             session = self.sessions[phone_number]
-            logger.info(f"♻️ Using existing session for {phone_number}")
-            return session
+
+            # Calculate inactivity time
+            inactivity_minutes = (datetime.now() - session.last_activity).total_seconds() / 60
+
+            # Auto-finalize if inactive for too long
+            if inactivity_minutes > self.auto_finalize_minutes:
+                logger.info(f"🔄 Auto-finalizing inactive session ({inactivity_minutes:.1f}m inactivity)")
+                logger.info(f"   📊 Auto-finalized summary: {session.get_summary()}")
+                self.end_session(phone_number)
+                # Will create new session below
+            else:
+                logger.info(f"♻️ Using existing session for {phone_number} (active {inactivity_minutes:.1f}m ago)")
+                return session
 
         # Create new session
         session = ConsultationSession(phone_number, doctor_session)
@@ -174,9 +187,12 @@ class ConsultationSessionManager:
 _session_manager: Optional[ConsultationSessionManager] = None
 
 
-def get_session_manager(timeout_minutes: int = 30) -> ConsultationSessionManager:
+def get_session_manager(timeout_minutes: int = 30, auto_finalize_minutes: int = 8) -> ConsultationSessionManager:
     """Get or create global session manager instance"""
     global _session_manager
     if _session_manager is None:
-        _session_manager = ConsultationSessionManager(session_timeout_minutes=timeout_minutes)
+        _session_manager = ConsultationSessionManager(
+            session_timeout_minutes=timeout_minutes,
+            auto_finalize_minutes=auto_finalize_minutes
+        )
     return _session_manager

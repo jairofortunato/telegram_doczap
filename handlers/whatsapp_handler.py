@@ -96,12 +96,15 @@ class WhatsAppHandler:
                     doctor_name = result["doctor"]["full_name"]
                     await self.whatsapp.send_text_message(
                         user_id,
-                        f"✅ Login realizado!\n\n"
-                        f"Bem-vindo, Dr(a). {doctor_name}\n\n"
-                        "🎙️ Envie um áudio da consulta\n"
-                        "📋 Usa o *Prontuário de Consulta Rápida*\n\n"
-                        "💡 Criar formato próprio:\n"
-                        "https://prontuarioautomatico.vercel.app/doctor/formatos-anamnese")
+                        f"✅ *Login Realizado com Sucesso!*\n\n"
+                        f"Bem-vindo, Doctor {doctor_name}\n\n"
+                        "✨ *Como usar o ProntoDoc:*\n"
+                        "• Envie áudios das consultas 🎙️\n"
+                        "• Envie fotos de exames 📸\n"
+                        "• Receba prontuários estruturados automaticamente\n\n"
+                        "📋 Usando modelo: *Prontuário de Consulta Rápida (SOAP)*\n\n"
+                        "💡 Digite *templates* para ver outros modelos\n"
+                        "💡 Digite *ajuda* para ver todos os comandos")
                 else:
                     await self.whatsapp.send_text_message(
                         user_id,
@@ -123,7 +126,9 @@ class WhatsAppHandler:
                 else:
                     await self.whatsapp.send_text_message(
                         user_id,
-                        "❌ Formato inválido\n\nEnvie *início* para começar")
+                        "❌ *Você precisa fazer login primeiro*\n\n"
+                        "📧 Envie seu email para fazer login\n"
+                        "🆕 Ou digite *início* para criar conta")
 
         except Exception as e:
             logger.error(f"Error handling WhatsApp text message: {e}")
@@ -147,6 +152,8 @@ class WhatsAppHandler:
                 await self.send_help_message(user_id)
             elif command in ['logout', 'sair']:
                 await self.handle_logout_command(user_id)
+            elif command in ['finalizar', 'nova consulta', 'novo paciente', '/finalizar', 'fim']:
+                await self.handle_finish_consultation(user_id)
             else:
                 await self.send_main_menu(user_id)
 
@@ -160,17 +167,30 @@ class WhatsAppHandler:
         if session:
             await self.whatsapp.send_text_message(
                 user_id,
-                f"✅ Já logado como Dr(a). {session['full_name']}\n\n"
+                f"✅ Já logado como Doctor {session['full_name']}\n\n"
                 "🎙️ Envie um áudio para transcrever")
             return
 
-        welcome_text = """*Bem-vindo ao ProntoDoc!*
+        welcome_text = """👋 *Bem-vindo ao ProntoDoc!*
 
-*Criar conta:*
+🤖 Assistente de prontuários médicos com IA
+
+✨ *O que o ProntoDoc faz:*
+• Transcreve consultas em áudio
+• Extrai resultados de exames
+• Gera prontuários estruturados (SOAP)
+• Integra tudo automaticamente
+
+🔐 *Para começar:*
+
+*Já tem conta?*
+Envie seu email para fazer login
+
+*Primeira vez?*
+Crie sua conta gratuita:
 https://prontuarioautomatico.vercel.app/signup
 
-*Fazer login:*
-Envie seu email"""
+💡 Digite *ajuda* para ver todos os comandos"""
 
         await self.whatsapp.send_text_message(user_id, welcome_text)
 
@@ -534,6 +554,9 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                 # Step 2: Get or create session
                 consultation_session = self.session_manager.get_or_create_session(user_id, session)
 
+                # Check if this is a fresh session (no content yet)
+                is_new_session = len(consultation_session.audio_transcripts) == 0 and len(consultation_session.image_extractions) == 0
+
                 # Store patient info and template if this is the first content
                 if not consultation_session.patient_name:
                     consultation_session.patient_name = "Paciente"
@@ -544,6 +567,21 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
 
                 # Step 3: Add transcript to session
                 consultation_session.add_audio_transcript(transcript, duration)
+
+                # Notify user if this is a new consultation
+                if is_new_session:
+                    new_consultation_msg = f"""🆕 *Nova Consulta Iniciada*
+
+📋 Modelo: {consultation_session.template_name}
+🏥 Especialidade: {consultation_session.template_specialty}
+
+✨ *Como usar:*
+• Envie áudios da consulta 🎙️
+• Envie fotos de exames 📸
+• Tudo será integrado no prontuário automaticamente
+
+💡 Digite *finalizar* quando terminar esta consulta"""
+                    await self.whatsapp.send_text_message(user_id, new_consultation_msg)
 
                 # Step 4: Regenerate prontuário from ALL session content
                 await self.whatsapp.send_text_message(
@@ -566,15 +604,39 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                         prontuario_msg += prontuario
                         await self.whatsapp.send_text_message(user_id, prontuario_msg)
 
-                    # Send success message with session info
+                    # Send success message with session info and action buttons
                     session_summary = consultation_session.get_summary()
-                    success_msg = (
-                        "✅ *Prontuário Atualizado*\n\n"
-                        f"📊 Áudios: {session_summary['audio_count']}\n"
-                        f"📸 Imagens: {session_summary['image_count']}\n\n"
-                        "💡 Envie mais áudios ou imagens para adicionar informações"
+
+                    # Contextual message: encourage images on first audio if none sent yet
+                    if session_summary['audio_count'] == 1 and session_summary['image_count'] == 0:
+                        success_msg = (
+                            "✅ *Prontuário Criado*\n\n"
+                            f"📊 Áudios: {session_summary['audio_count']}\n"
+                            f"📸 Imagens: {session_summary['image_count']}\n\n"
+                            "📸 *Dica:* Você pode enviar fotos de exames!\n"
+                            "Hemogramas, laudos, receitas... O prontuário será automaticamente atualizado.\n\n"
+                            "💡 Ou continue enviando áudios para adicionar mais informações"
+                        )
+                    else:
+                        success_msg = (
+                            "✅ *Prontuário Atualizado*\n\n"
+                            f"📊 Áudios: {session_summary['audio_count']}\n"
+                            f"📸 Imagens: {session_summary['image_count']}\n\n"
+                            "💡 Envie mais áudios ou imagens para adicionar informações"
+                        )
+
+                    buttons = [
+                        {"id": "finalizar", "title": "🏁 Finalizar Consulta"},
+                        {"id": "templates", "title": "📋 Trocar Modelo"}
+                    ]
+
+                    await self.whatsapp.send_interactive_message(
+                        user_id,
+                        "Prontuário Pronto",
+                        success_msg,
+                        "O que deseja fazer?",
+                        buttons
                     )
-                    await self.whatsapp.send_text_message(user_id, success_msg)
 
                     # Mark processing as successful
                     processing_success = True
@@ -732,15 +794,28 @@ A transcrição foi extraída com sucesso!
                     prontuario_msg += prontuario
                     await self.whatsapp.send_text_message(user_id, prontuario_msg)
 
-                # Send success message with session info
+                # Send success message with session info and action buttons
                 session_summary = consultation_session.get_summary()
                 success_msg = (
-                    "✅ *Prontuário Atualizado com Imagem!*\n\n"
+                    "✅ *Prontuário Atualizado com Exame!*\n\n"
                     f"📊 Áudios: {session_summary['audio_count']}\n"
                     f"📸 Imagens: {session_summary['image_count']}\n\n"
-                    "💡 Envie mais áudios ou imagens para adicionar informações"
+                    "📋 Os resultados do exame foram integrados ao prontuário.\n\n"
+                    "💡 Envie mais exames ou áudios para adicionar informações"
                 )
-                await self.whatsapp.send_text_message(user_id, success_msg)
+
+                buttons = [
+                    {"id": "finalizar", "title": "🏁 Finalizar Consulta"},
+                    {"id": "templates", "title": "📋 Trocar Modelo"}
+                ]
+
+                await self.whatsapp.send_interactive_message(
+                    user_id,
+                    "Prontuário Atualizado",
+                    success_msg,
+                    "O que deseja fazer?",
+                    buttons
+                )
 
                 # Mark processing as successful
                 processing_success = True
@@ -785,6 +860,8 @@ A transcrição foi extraída com sucesso!
                     await self.handle_status_command(user_id)
                 elif button_id == 'logout':
                     await self.handle_logout_command(user_id)
+                elif button_id == 'finalizar':
+                    await self.handle_finish_consultation(user_id)
                 elif button_id == 'menu':
                     await self.send_main_menu(user_id)
                 else:
@@ -803,14 +880,25 @@ A transcrição foi extraída com sucesso!
 
             if selected_template:
                 template_name = selected_template.get("name", "N/A")
-                template_info = f"📋 {template_name}"
+                template_specialty = selected_template.get("specialty", "N/A")
+                template_info = f"📋 Modelo: {template_name}\n🏥 Especialidade: {template_specialty}"
             else:
-                template_info = "📋 Prontuário de Consulta Rápida"
+                template_info = "📋 Modelo: Prontuário de Consulta Rápida (SOAP)\n🏥 Especialidade: Clínica Geral"
 
-            status_msg = f"""✅ Dr(a). {doctor_name}
-{template_info}
+            # Check if there's an active consultation
+            consultation_session = self.session_manager.get_session(user_id)
+            if consultation_session:
+                session_summary = consultation_session.get_summary()
+                consultation_info = f"\n\n📊 *Consulta em andamento:*\n• Áudios: {session_summary['audio_count']}\n• Imagens: {session_summary['image_count']}\n• Duração: {session_summary['duration_minutes']:.1f} min"
+            else:
+                consultation_info = "\n\n💡 Nenhuma consulta em andamento"
 
-🎙️ Envie áudio para transcrever"""
+            status_msg = f"""✅ *Status do ProntoDoc*
+
+👤 Doctor {doctor_name}
+{template_info}{consultation_info}
+
+🎙️ Envie áudio para continuar ou iniciar nova consulta"""
 
             await self.whatsapp.send_text_message(user_id, status_msg)
         else:
@@ -824,6 +912,45 @@ A transcrição foi extraída com sucesso!
         self.auth.clear_pending_login(user_id)
         await self.whatsapp.send_text_message(user_id, "✅ Logout realizado")
 
+    async def handle_finish_consultation(self, user_id: str):
+        """Finish current consultation and prepare for new one"""
+        session = self.auth.get_doctor_session(user_id)
+        if not session:
+            await self.whatsapp.send_text_message(
+                user_id,
+                "❌ Você não está logado."
+            )
+            return
+
+        # Get current consultation session
+        consultation_session = self.session_manager.get_session(user_id)
+
+        if not consultation_session:
+            await self.whatsapp.send_text_message(
+                user_id,
+                "ℹ️ Nenhuma consulta ativa no momento."
+            )
+            return
+
+        # Get summary before ending
+        summary = consultation_session.get_summary()
+
+        # End the session
+        self.session_manager.end_session(user_id)
+
+        # Send confirmation with summary
+        confirmation_msg = f"""✅ *Consulta Finalizada com Sucesso*
+
+📊 *Resumo desta consulta:*
+• Áudios processados: {summary['audio_count']}
+• Exames integrados: {summary['image_count']}
+• Duração total: {summary['duration_minutes']:.1f} minutos
+
+🆕 *Pronto para nova consulta!*
+Envie um áudio para iniciar o próximo atendimento."""
+
+        await self.whatsapp.send_text_message(user_id, confirmation_msg)
+
     async def send_help_message(self, user_id: str):
         """Send help message"""
         help_text = """*Comandos:*
@@ -831,13 +958,15 @@ A transcrição foi extraída com sucesso!
 início - Iniciar
 status - Ver status
 templates - Ver modelos
+finalizar - Finalizar consulta atual
 logout - Sair
 
 *Como usar:*
 1. Envie seu email
 2. Envie sua senha
 3. Envie áudio da consulta
-4. Receba transcrição + prontuário"""
+4. Receba transcrição + prontuário
+5. Digite *finalizar* para nova consulta"""
 
         await self.whatsapp.send_text_message(user_id, help_text)
 

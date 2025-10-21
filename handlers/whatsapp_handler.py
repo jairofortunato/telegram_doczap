@@ -775,6 +775,14 @@ A transcrição foi extraída com sucesso!
             # Step 3: Add image extraction to session
             consultation_session.add_image_extraction(extracted_text)
 
+            # Debug: verify image was added
+            print(f"\n📸 [DEBUG] Image extraction added to session")
+            print(f"   User: {user_id}")
+            print(f"   Extracted text length: {len(extracted_text)} chars")
+            print(f"   Total images in session: {len(consultation_session.image_extractions)}")
+            print(f"   Total audios in session: {len(consultation_session.audio_transcripts)}")
+            print(f"   Extracted text preview: {extracted_text[:200]}...\n")
+
             # Step 4: Regenerate prontuário from ALL session content (audios + images)
             await self.whatsapp.send_text_message(
                 user_id,
@@ -987,6 +995,19 @@ logout - Sair
                 return {"success": False, "error": "No content to process"}
 
             logger.info(f"🔄 Regenerating prontuário from session content ({len(accumulated_content)} chars)")
+            logger.info(f"📊 Session stats - Audios: {len(consultation_session.audio_transcripts)}, Images: {len(consultation_session.image_extractions)}")
+            logger.info(f"📝 Accumulated content preview:\n{accumulated_content[:500]}...")
+
+            # Debug: print full accumulated content
+            print(f"\n{'='*80}")
+            print(f"🔍 [DEBUG] ACCUMULATED CONTENT FOR PRONTUÁRIO GENERATION")
+            print(f"{'='*80}")
+            print(f"📊 Audios: {len(consultation_session.audio_transcripts)}")
+            print(f"📸 Images: {len(consultation_session.image_extractions)}")
+            print(f"📏 Total length: {len(accumulated_content)} chars")
+            print(f"{'='*80}")
+            print(accumulated_content)
+            print(f"{'='*80}\n")
 
             # Use selected template or default
             template = consultation_session.template or {
@@ -1011,6 +1032,14 @@ logout - Sair
                     "template_specialty": template.get("specialty", "Clínica Geral"),
                     "ai_prompt_template": template.get("ai_prompt_template")
                 }
+
+                # Debug: log API payload
+                print(f"\n🌐 [DEBUG] Sending to AI Processor:")
+                print(f"   URL: {ai_processor_url}/api/telegram/generate-prontuario")
+                print(f"   Patient: {payload['patient_name']}")
+                print(f"   Template: {payload['template_name']}")
+                print(f"   Transcript length: {len(payload['transcript'])} chars")
+                print(f"   Transcript preview: {payload['transcript'][:300]}...\n")
 
                 response = await client.post(
                     f"{ai_processor_url}/api/telegram/generate-prontuario",

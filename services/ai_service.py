@@ -335,29 +335,49 @@ class AIService:
         """
         try:
             logger.info("📋 Fetching consultation templates from web app...")
+            logger.info(f"   - Web App URL: {self.web_app_url}")
+            logger.info(f"   - Doctor Profile ID: {doctor_session.get('profile_id')}")
 
             # Use the web app's consultation templates API
             headers = {}
 
             # Add authentication if we have a session token
             if doctor_session.get('session_token'):
-                headers["Authorization"] = f"Bearer {doctor_session.get('session_token')}"
+                token = doctor_session.get('session_token')
+                headers["Authorization"] = f"Bearer {token}"
                 logger.info("🔐 Using authentication token for templates request")
+                logger.info(f"   - Token (first 20 chars): {token[:20]}...")
+                logger.info(f"   - Token (last 20 chars): ...{token[-20:]}")
             else:
                 logger.info("ℹ️ No authentication token, fetching public templates only")
 
-            response = await self.client.get(
-                f"{self.web_app_url}/api/doctor/consultation-templates",
-                headers=headers
-            )
+            api_url = f"{self.web_app_url}/api/doctor/consultation-templates"
+            logger.info(f"📡 Making GET request to: {api_url}")
+
+            response = await self.client.get(api_url, headers=headers)
+
+            logger.info(f"📡 Response status: {response.status_code}")
 
             if response.status_code == 200:
                 result = response.json()
+                logger.info(f"📡 Response JSON: {result.get('success')}, {result.get('count', 0)} templates")
+
                 if result.get('success'):
                     templates = result.get('templates', [])
                     logger.info(f"✅ Found {len(templates)} templates from web app")
-                    logger.info(f"   - Public/default templates: {sum(1 for t in templates if t.get('is_public') or t.get('is_default'))}")
-                    logger.info(f"   - Doctor's own templates: {sum(1 for t in templates if t.get('created_by') == doctor_session.get('profile_id'))}")
+
+                    # Detailed template breakdown
+                    public_count = sum(1 for t in templates if t.get('is_public'))
+                    default_count = sum(1 for t in templates if t.get('is_default'))
+                    doctor_own_count = sum(1 for t in templates if t.get('created_by') == doctor_session.get('profile_id'))
+
+                    logger.info(f"   - Public templates: {public_count}")
+                    logger.info(f"   - Default templates: {default_count}")
+                    logger.info(f"   - Doctor's own templates: {doctor_own_count}")
+
+                    # List all templates
+                    for i, t in enumerate(templates, 1):
+                        logger.info(f"   {i}. {t.get('name')} - created_by: {t.get('created_by')}, public: {t.get('is_public')}, default: {t.get('is_default')}")
 
                     return {
                         "success": True,
@@ -368,7 +388,7 @@ class AIService:
                     return self._get_fallback_templates()
             else:
                 logger.error(f"❌ Web app template request failed: {response.status_code}")
-                logger.error(f"Response: {response.text}")
+                logger.error(f"Response body: {response.text[:500]}")
                 # Return fallback template on error
                 return self._get_fallback_templates()
 

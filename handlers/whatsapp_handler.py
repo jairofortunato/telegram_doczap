@@ -294,10 +294,27 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                 await self.whatsapp.send_text_message(user_id, "❌ Faça login primeiro")
                 return
 
+            # Debug: Log session details
+            logger.info(f"📋 [TEMPLATES] Fetching templates for doctor:")
+            logger.info(f"   - User ID: {user_id}")
+            logger.info(f"   - Profile ID: {session.get('profile_id')}")
+            logger.info(f"   - Email: {session.get('email')}")
+            logger.info(f"   - Has session_token: {bool(session.get('session_token'))}")
+            if session.get('session_token'):
+                logger.info(f"   - Token length: {len(session.get('session_token'))} chars")
+
             result = await self.ai.get_templates(session)
 
             if result.get("success"):
                 templates = result.get("templates", [])
+
+                # Debug: Log template details
+                logger.info(f"📋 [TEMPLATES] Received {len(templates)} templates from API")
+                for i, template in enumerate(templates, 1):
+                    logger.info(f"   {i}. {template.get('name')} ({template.get('specialty')})")
+                    logger.info(f"      - is_public: {template.get('is_public')}")
+                    logger.info(f"      - is_default: {template.get('is_default')}")
+                    logger.info(f"      - created_by: {template.get('created_by')}")
 
                 if not templates:
                     await self.whatsapp.send_text_message(user_id, "❌ Nenhum modelo encontrado")

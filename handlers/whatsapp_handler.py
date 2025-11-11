@@ -420,55 +420,93 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                     self.processing_state.finish_processing(media_id, success=False)
                 return
 
-            # ===== SUBSCRIPTION CHECK DISABLED - Allow all users to record freely =====
-            # if self.subscription:
-            #     limit_check = await self.subscription.check_consultation_limit(user_id, session)
-            #
-            #     if not limit_check.get("can_create", False):
-            #         # FREE TIER LIMIT EXCEEDED - Block and show payment link
-            #         tier = limit_check.get("tier", "free")
-            #         consultations_used = limit_check.get("consultations_used", 0)
-            #         consultations_limit = limit_check.get("consultations_limit", 3)
-            #
-            #         payment_link = self.subscription.get_payment_link(user_id)
-            #
-            #         limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
-            #
-            # Você usou suas {consultations_limit} consultas gratuitas.
-            #
-            # 🚀 *Plano Professional - R$ 190/mês*
-            # ✅ Prontuários ilimitados
-            # ✅ Transcrição em tempo real
-            # ✅ Templates personalizados
-            # ✅ Suporte prioritário
-            #
-            # 🔗 *Assine agora:*
-            # {payment_link}
-            #
-            # 💡 *Dica:* Com o Professional, você pode criar quantos prontuários quiser sem limites!"""
-            #
-            #         buttons = [
-            #             {"id": "status", "title": "📊 Ver Status"},
-            #             {"id": "menu", "title": "📋 Menu"}
-            #         ]
-            #
-            #         await self.whatsapp.send_interactive_message(
-            #             user_id,
-            #             "Upgrade Necessário",
-            #             limit_msg,
-            #             "Próximas ações",
-            #             buttons
-            #         )
-            #         return
-            #
-            #     # Show usage for free tier users
-            #     if limit_check.get("tier") == "free":
-            #         consultations_used = limit_check.get("consultations_used", 0)
-            #         remaining = limit_check.get("remaining", 0)
-            #
-            #         if remaining <= 1:  # Last free consultation warning
-            #             warning_msg = f"⚠️ Esta é sua última consulta gratuita ({consultations_used + 1}/3)!"
-            #             await self.whatsapp.send_text_message(user_id, warning_msg)
+            # ===== SUBSCRIPTION CHECK - Check consultation limit before processing =====
+            if self.subscription:
+                # Get profile user_id from session
+                profile_user_id = session.get('user_id') or session.get('profile_id')
+
+                if not profile_user_id:
+                    logger.warning(f"⚠️ No user_id found in session for WhatsApp user {user_id}")
+                else:
+                    limit_check = await self.subscription.check_consultation_limit_direct(profile_user_id)
+
+                    if not limit_check.get("can_create", False):
+                        # FREE TIER LIMIT EXCEEDED - Create checkout session and send link
+                        consultations_used = limit_check.get("consultations_used", 0)
+                        consultations_limit = limit_check.get("consultations_limit", 5)
+
+                        # Get user email from session
+                        user_email = session.get('email', '')
+                        user_phone = user_id  # WhatsApp phone number
+
+                        # Create Stripe checkout session
+                        checkout_result = await self.subscription.create_checkout_session(
+                            profile_user_id,
+                            user_email,
+                            user_phone
+                        )
+
+                        if checkout_result.get("success"):
+                            checkout_url = checkout_result.get("checkout_url")
+
+                            limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
+
+Você usou suas {consultations_limit} consultas gratuitas.
+
+🚀 *Plano Professional - R$ 190/mês*
+✅ Prontuários ilimitados
+✅ Transcrição em tempo real
+✅ Templates personalizados
+✅ Suporte prioritário
+
+🔗 *Assine agora:*
+{checkout_url}
+
+💡 *Dica:* Com o Professional, você pode criar quantos prontuários quiser sem limites!"""
+                        else:
+                            # Fallback to web app if checkout creation fails
+                            web_app_url = self.subscription.web_app_url
+                            limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
+
+Você usou suas {consultations_limit} consultas gratuitas.
+
+🚀 *Plano Professional - R$ 190/mês*
+✅ Prontuários ilimitados
+✅ Transcrição em tempo real
+✅ Templates personalizados
+✅ Suporte prioritário
+
+🔗 *Assine agora:*
+{web_app_url}/doctor/configuracoes
+
+💡 *Dica:* Com o Professional, você pode criar quantos prontuários quiser sem limites!"""
+
+                        buttons = [
+                            {"id": "status", "title": "📊 Ver Status"},
+                            {"id": "menu", "title": "📋 Menu"}
+                        ]
+
+                        await self.whatsapp.send_interactive_message(
+                            user_id,
+                            "Upgrade Necessário",
+                            limit_msg,
+                            "Próximas ações",
+                            buttons
+                        )
+
+                        # Mark processing as finished
+                        if self.processing_state:
+                            self.processing_state.finish_processing(media_id, success=False)
+                        return
+
+                    # Show usage for free tier users
+                    if limit_check.get("tier") == "free":
+                        consultations_used = limit_check.get("consultations_used", 0)
+                        remaining = limit_check.get("remaining", 0)
+
+                        if remaining <= 1:  # Last free consultation warning
+                            warning_msg = f"⚠️ Esta é sua última consulta gratuita ({consultations_used + 1}/5)!"
+                            await self.whatsapp.send_text_message(user_id, warning_msg)
 
             # Use selected template or default to SOAP padrão
             selected_template = self.auth.get_selected_template(user_id)
@@ -620,6 +658,19 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                         prontuario_msg += f"🎯 *Modelo:* {template_name} ({template_specialty})\n\n"
                         prontuario_msg += prontuario
                         await self.whatsapp.send_text_message(user_id, prontuario_msg)
+
+                    # Increment usage counter for new consultations (free tier only)
+                    if is_new_session and self.subscription:
+                        profile_user_id = session.get('user_id') or session.get('profile_id')
+                        if profile_user_id:
+                            # Check if user is on free tier before incrementing
+                            tier_check = await self.subscription.check_consultation_limit_direct(profile_user_id)
+                            if tier_check.get("tier") == "free":
+                                increment_result = await self.subscription.increment_usage_direct(profile_user_id)
+                                if increment_result.get("success"):
+                                    logger.info(f"✅ Usage incremented for user {profile_user_id} - now at {increment_result.get('consultations_used', 'unknown')}")
+                                else:
+                                    logger.warning(f"⚠️ Failed to increment usage for user {profile_user_id}: {increment_result.get('error')}")
 
                     # Send success message with session info and action buttons
                     session_summary = consultation_session.get_summary()

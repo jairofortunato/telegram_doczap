@@ -194,11 +194,12 @@ class SubscriptionService:
         """
         try:
             if not self.supabase:
-                logger.error("❌ Supabase not configured")
+                logger.error("❌ Supabase not configured - BLOCKING ACCESS")
                 return {
-                    "can_create": True,
+                    "can_create": False,
                     "tier": "unknown",
-                    "message": "Database not configured - allowing access"
+                    "upgrade_required": True,
+                    "message": "Sistema de verificação não configurado. Entre em contato com o suporte."
                 }
 
             logger.info(f"🔍 Checking consultation limit directly for user {user_id}")
@@ -271,14 +272,16 @@ class SubscriptionService:
 
         except Exception as e:
             logger.error(f"❌ Error checking consultation limit: {e}")
-            # Graceful degradation - allow access if check fails
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # STRICT MODE - block access if check fails to prevent payment bypass
             return {
-                "can_create": True,
+                "can_create": False,
                 "tier": "unknown",
                 "consultations_used": 0,
                 "consultations_limit": 5,
-                "upgrade_required": False,
-                "message": "Erro na verificação - permitindo acesso"
+                "upgrade_required": True,
+                "message": "Erro na verificação de assinatura. Tente novamente ou entre em contato com o suporte."
             }
 
     async def create_checkout_session(self, user_id: str, user_email: str, user_phone: str = None) -> Dict[str, Any]:

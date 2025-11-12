@@ -191,7 +191,7 @@ async def handle_start_command(chat_id: int, user_id: int):
     session = auth_service.get_doctor_session(user_id)
     if session:
         send_telegram_message(BOT_TOKEN, chat_id,
-            f"✅ Já logado como Doctor {session['full_name']}\n\n"
+            f"✅ Já logado como Dr. {session['full_name']}\n\n"
             "🎙️ Envie um áudio para transcrever.")
         return
 
@@ -227,7 +227,7 @@ async def handle_text_input(chat_id: int, user_id: int, text: str):
                 doctor_name = result["doctor"]["full_name"]
                 send_telegram_message(BOT_TOKEN, chat_id,
                     f"✅ Login realizado!\n\n"
-                    f"Bem-vindo, Doctor {doctor_name}\n\n"
+                    f"Bem-vindo, Dr. {doctor_name}\n\n"
                     "🎙️ Envie um áudio da consulta\n"
                     "📋 Usa o *Prontuário de Consulta Rápida*\n\n"
                     "💡 Criar formato próprio:\n"

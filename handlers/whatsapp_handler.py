@@ -64,7 +64,7 @@ class WhatsAppHandler:
             text = text.strip()
 
             # Handle commands first
-            if text.startswith('/') or text.lower() in ['início', 'start', 'oi', 'olá', 'menu']:
+            if text.startswith('/') or text.lower() in ['início', 'start', 'oi', 'olá', 'menu', 'logout', 'sair', 'ajuda', 'help', 'status', 'situação', 'finalizar', 'nova consulta', 'novo paciente', 'fim', 'login', 'fazer login', 'cadastrar', 'criar conta', 'templates', 'modelos']:
                 await self.handle_command(user_id, text)
                 return
 
@@ -421,35 +421,51 @@ Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa platafo
                 return
 
             # ===== SUBSCRIPTION CHECK - Check consultation limit before processing =====
-            if self.subscription:
-                # Get profile user_id from session
-                profile_user_id = session.get('user_id') or session.get('profile_id')
+            if not self.subscription:
+                logger.error(f"❌ Subscription service not initialized - BLOCKING ACCESS for user {user_id}")
+                await self.whatsapp.send_text_message(
+                    user_id,
+                    "❌ Sistema de verificação indisponível. Entre em contato com o suporte."
+                )
+                if self.processing_state:
+                    self.processing_state.finish_processing(media_id, success=False)
+                return
 
-                if not profile_user_id:
-                    logger.warning(f"⚠️ No user_id found in session for WhatsApp user {user_id}")
-                else:
-                    limit_check = await self.subscription.check_consultation_limit_direct(profile_user_id)
+            # Get profile user_id from session
+            profile_user_id = session.get('user_id') or session.get('profile_id')
 
-                    if not limit_check.get("can_create", False):
-                        # FREE TIER LIMIT EXCEEDED - Create checkout session and send link
-                        consultations_used = limit_check.get("consultations_used", 0)
-                        consultations_limit = limit_check.get("consultations_limit", 5)
+            if not profile_user_id:
+                logger.error(f"❌ No user_id found in session for WhatsApp user {user_id} - blocking access")
+                await self.whatsapp.send_text_message(
+                    user_id,
+                    "❌ Erro: Sessão inválida. Faça logout e login novamente."
+                )
+                if self.processing_state:
+                    self.processing_state.finish_processing(media_id, success=False)
+                return
 
-                        # Get user email from session
-                        user_email = session.get('email', '')
-                        user_phone = user_id  # WhatsApp phone number
+            limit_check = await self.subscription.check_consultation_limit_direct(profile_user_id)
 
-                        # Create Stripe checkout session
-                        checkout_result = await self.subscription.create_checkout_session(
-                            profile_user_id,
-                            user_email,
-                            user_phone
-                        )
+            if not limit_check.get("can_create", False):
+                # FREE TIER LIMIT EXCEEDED - Create checkout session and send link
+                consultations_used = limit_check.get("consultations_used", 0)
+                consultations_limit = limit_check.get("consultations_limit", 5)
 
-                        if checkout_result.get("success"):
-                            checkout_url = checkout_result.get("checkout_url")
+                # Get user email from session
+                user_email = session.get('email', '')
+                user_phone = user_id  # WhatsApp phone number
 
-                            limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
+                # Create Stripe checkout session
+                checkout_result = await self.subscription.create_checkout_session(
+                    profile_user_id,
+                    user_email,
+                    user_phone
+                )
+
+                if checkout_result.get("success"):
+                    checkout_url = checkout_result.get("checkout_url")
+
+                    limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
 
 Você usou suas {consultations_limit} consultas gratuitas.
 
@@ -463,10 +479,10 @@ Você usou suas {consultations_limit} consultas gratuitas.
 {checkout_url}
 
 💡 *Dica:* Com o Professional, você pode criar quantos prontuários quiser sem limites!"""
-                        else:
-                            # Fallback to web app if checkout creation fails
-                            web_app_url = self.subscription.web_app_url
-                            limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
+                else:
+                    # Fallback to web app if checkout creation fails
+                    web_app_url = self.subscription.web_app_url
+                    limit_msg = f"""❌ *Limite de consultas gratuitas atingido*
 
 Você usou suas {consultations_limit} consultas gratuitas.
 
@@ -481,32 +497,32 @@ Você usou suas {consultations_limit} consultas gratuitas.
 
 💡 *Dica:* Com o Professional, você pode criar quantos prontuários quiser sem limites!"""
 
-                        buttons = [
-                            {"id": "status", "title": "📊 Ver Status"},
-                            {"id": "menu", "title": "📋 Menu"}
-                        ]
+                buttons = [
+                    {"id": "status", "title": "📊 Ver Status"},
+                    {"id": "menu", "title": "📋 Menu"}
+                ]
 
-                        await self.whatsapp.send_interactive_message(
-                            user_id,
-                            "Upgrade Necessário",
-                            limit_msg,
-                            "Próximas ações",
-                            buttons
-                        )
+                await self.whatsapp.send_interactive_message(
+                    user_id,
+                    "Upgrade Necessário",
+                    limit_msg,
+                    "Próximas ações",
+                    buttons
+                )
 
-                        # Mark processing as finished
-                        if self.processing_state:
-                            self.processing_state.finish_processing(media_id, success=False)
-                        return
+                # Mark processing as finished
+                if self.processing_state:
+                    self.processing_state.finish_processing(media_id, success=False)
+                return
 
-                    # Show usage for free tier users
-                    if limit_check.get("tier") == "free":
-                        consultations_used = limit_check.get("consultations_used", 0)
-                        remaining = limit_check.get("remaining", 0)
+            # Show usage for free tier users
+            if limit_check.get("tier") == "free":
+                consultations_used = limit_check.get("consultations_used", 0)
+                remaining = limit_check.get("remaining", 0)
 
-                        if remaining <= 1:  # Last free consultation warning
-                            warning_msg = f"⚠️ Esta é sua última consulta gratuita ({consultations_used + 1}/5)!"
-                            await self.whatsapp.send_text_message(user_id, warning_msg)
+                if remaining <= 1:  # Last free consultation warning
+                    warning_msg = f"⚠️ Esta é sua última consulta gratuita ({consultations_used + 1}/5)!"
+                    await self.whatsapp.send_text_message(user_id, warning_msg)
 
             # Use selected template or default to SOAP padrão
             selected_template = self.auth.get_selected_template(user_id)
@@ -774,6 +790,22 @@ Você usou suas {consultations_limit} consultas gratuitas.
                 await self.whatsapp.send_text_message(
                     user_id,
                     "❌ Serviço de processamento de imagens não disponível."
+                )
+                if self.processing_state:
+                    self.processing_state.finish_processing(media_id, success=False)
+                return
+
+            # ===== SUBSCRIPTION CHECK FOR IMAGES =====
+            # Images are part of the same consultation session, so we need to check
+            # if the user has an active session (which means they already passed the check for audio)
+            consultation_session = self.session_manager.get_session(user_id)
+
+            if not consultation_session:
+                # No active session - user needs to send audio first (which checks subscription)
+                await self.whatsapp.send_text_message(
+                    user_id,
+                    "⚠️ Por favor, envie primeiro um áudio da consulta.\n\n"
+                    "As imagens serão integradas ao prontuário da consulta ativa."
                 )
                 if self.processing_state:
                     self.processing_state.finish_processing(media_id, success=False)

@@ -97,8 +97,8 @@ class WhatsAppHandler:
                     await self.whatsapp.send_text_message(
                         user_id,
                         f"✅ *Login Realizado com Sucesso!*\n\n"
-                        f"Bem-vindo, Doctor {doctor_name}\n\n"
-                        "✨ *Como usar o ProntoDoc:*\n"
+                        f"Bem-vindo, Dr. {doctor_name}\n\n"
+                        "✨ *Como usar o Prontodoc:*\n"
                         "• Envie áudios das consultas 🎙️\n"
                         "• Envie fotos de exames 📸\n"
                         "• Receba prontuários estruturados automaticamente\n\n"
@@ -167,15 +167,15 @@ class WhatsAppHandler:
         if session:
             await self.whatsapp.send_text_message(
                 user_id,
-                f"✅ Já logado como Doctor {session['full_name']}\n\n"
+                f"✅ Já logado como Dr. {session['full_name']}\n\n"
                 "🎙️ Envie um áudio para transcrever")
             return
 
-        welcome_text = """👋 *Bem-vindo ao ProntoDoc!*
+        welcome_text = """👋 *Bem-vindo ao Prontodoc!*
 
 🤖 Assistente de prontuários médicos com IA
 
-✨ *O que o ProntoDoc faz:*
+✨ *O que o Prontodoc faz:*
 • Transcreve consultas em áudio
 • Extrai resultados de exames
 • Gera prontuários estruturados (SOAP)
@@ -219,7 +219,7 @@ Faça login ou crie sua conta:"""
 
         await self.whatsapp.send_interactive_message(
             user_id,
-            "Menu ProntoDoc",
+            "Menu Prontodoc",
             menu_text,
             "Selecione uma opção",
             buttons
@@ -227,7 +227,7 @@ Faça login ou crie sua conta:"""
 
     async def send_login_instructions(self, user_id: str):
         """Send login instructions"""
-        login_text = """🔐 *Login no ProntoDoc*
+        login_text = """🔐 *Login no Prontodoc*
 
 Para fazer login, envie sua mensagem no formato:
 
@@ -246,7 +246,7 @@ Clique em *Criar Conta* abaixo."""
 
         await self.whatsapp.send_interactive_message(
             user_id,
-            "Login ProntoDoc",
+            "Login Prontodoc",
             login_text,
             "Precisa de ajuda?",
             buttons
@@ -256,7 +256,7 @@ Clique em *Criar Conta* abaixo."""
         """Send signup link"""
         signup_text = """📝 *Criar Conta de Médico*
 
-Para usar o ProntoDoc, você precisa criar uma conta de médico na nossa plataforma.
+Para usar o Prontodoc, você precisa criar uma conta de médico na nossa plataforma.
 
 🔗 *Link de Cadastro:*
 👉 https://prontuarioautomatico.vercel.app/signup
@@ -514,15 +514,6 @@ Você usou suas {consultations_limit} consultas gratuitas.
                 if self.processing_state:
                     self.processing_state.finish_processing(media_id, success=False)
                 return
-
-            # Show usage for free tier users
-            if limit_check.get("tier") == "free":
-                consultations_used = limit_check.get("consultations_used", 0)
-                remaining = limit_check.get("remaining", 0)
-
-                if remaining <= 1:  # Last free consultation warning
-                    warning_msg = f"⚠️ Esta é sua última consulta gratuita ({consultations_used + 1}/5)!"
-                    await self.whatsapp.send_text_message(user_id, warning_msg)
 
             # Use selected template or default to SOAP padrão
             selected_template = self.auth.get_selected_template(user_id)
@@ -1001,9 +992,9 @@ A transcrição foi extraída com sucesso!
             else:
                 consultation_info = "\n\n💡 Nenhuma consulta em andamento"
 
-            status_msg = f"""✅ *Status do ProntoDoc*
+            status_msg = f"""✅ *Status do Prontodoc*
 
-👤 Doctor {doctor_name}
+👤 Dr. {doctor_name}
 {template_info}{consultation_info}
 
 🎙️ Envie áudio para continuar ou iniciar nova consulta"""

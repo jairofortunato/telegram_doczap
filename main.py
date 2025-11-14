@@ -198,7 +198,7 @@ async def handle_start_command(chat_id: int, user_id: int):
     welcome_msg = """*Bem-vindo ao ProntoDoc!*
 
 **Criar conta:**
-https://prontuarioautomatico.vercel.app/signup
+https://prontodoc.site/signup
 
 **Fazer login:**
 Envie seu email"""
@@ -231,7 +231,7 @@ async def handle_text_input(chat_id: int, user_id: int, text: str):
                     "🎙️ Envie um áudio da consulta\n"
                     "📋 Usa o *Prontuário de Consulta Rápida*\n\n"
                     "💡 Criar formato próprio:\n"
-                    "https://prontuarioautomatico.vercel.app/doctor/formatos-anamnese")
+                    "https://prontodoc.site/doctor/formatos-anamnese")
                 logger.info(f"✅ Login successful for {email}")
             else:
                 send_telegram_message(BOT_TOKEN, chat_id,
@@ -404,7 +404,7 @@ async def handle_cadastrar_command(chat_id: int, user_id: int):
     """Handle /cadastrar command - provide signup link"""
     cadastrar_msg = """*Criar conta:*
 
-https://prontuarioautomatico.vercel.app/signup
+https://prontodoc.site/signup
 
 Após criar, envie /start para fazer login"""
 

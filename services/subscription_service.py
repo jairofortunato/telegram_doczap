@@ -15,11 +15,11 @@ class SubscriptionService:
     def __init__(self):
         self.web_app_url = os.getenv(
             'WEB_APP_URL',
-            'https://prontuarioautomatico.vercel.app'
+            'https://prontodoc.site'
         )
         self.stripe_payment_link = os.getenv(
             'STRIPE_PAYMENT_LINK',
-            'https://prontuarioautomatico.vercel.app/pricing'
+            'https://prontodoc.site/pricing'
         )
 
         # HTTP client for async requests

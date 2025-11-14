@@ -188,7 +188,7 @@ Envie seu email para fazer login
 
 *Primeira vez?*
 Crie sua conta gratuita:
-https://prontuarioautomatico.vercel.app/signup
+https://prontodoc.site/signup
 
 💡 Digite *ajuda* para ver todos os comandos"""
 
@@ -259,7 +259,7 @@ Clique em *Criar Conta* abaixo."""
 Para usar o Prontodoc, você precisa criar uma conta de médico na nossa plataforma.
 
 🔗 *Link de Cadastro:*
-👉 https://prontuarioautomatico.vercel.app/signup
+👉 https://prontodoc.site/signup
 
 *O que você pode fazer após criar sua conta:*
 ✅ Transcrição automática de consultas

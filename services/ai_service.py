@@ -18,7 +18,7 @@ class AIService:
         )
         self.web_app_url = os.getenv(
             'WEB_APP_URL',
-            'https://prontuarioautomatico.vercel.app'
+            'https://prontodoc.site'
         )
 
         # HTTP client for async requests
